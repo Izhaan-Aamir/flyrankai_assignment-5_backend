@@ -80,3 +80,43 @@ Books to Scrape is intended for practicing web scraping, so it provides an appro
 The scraper will use only the required three catalogue pages and will follow polite request practices such as identifying itself, using timeouts, caching downloaded pages, and adding delays between real requests.
 
 > I will not reuse this code on another site without checking its rules and terms first.
+
+## Stage 1 — Fetch and Cache
+
+The scraper downloads the first Books to Scrape catalogue page:
+
+```text
+https://books.toscrape.com/catalogue/page-1.html
+```
+
+The request uses:
+
+- An identifying User-Agent
+- A 5-second timeout
+- HTTP status-code validation
+
+A successful response is saved locally as:
+
+```text
+cache/catalogue-page-1.html
+```
+
+During development, the cached file is reused instead of requesting the same page repeatedly.
+
+### Stage 1 Checkpoint
+
+The first run produces:
+
+```text
+FETCH
+Response size: <number> bytes
+```
+
+A second run produces:
+
+```text
+CACHE HIT
+Response size: <same number> bytes
+```
+
+The complete HTML document is not printed to the terminal.
