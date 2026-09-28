@@ -120,3 +120,28 @@ Response size: <same number> bytes
 ```
 
 The complete HTML document is not printed to the terminal.
+
+## Stage 2 — Discover Three Catalogue Pages
+
+The scraper now parses the saved catalogue HTML using Beautiful Soup.
+
+It starts from catalogue page 1 and follows the catalogue's `Next` link until exactly three catalogue pages have been processed.
+
+For each catalogue page, the scraper:
+
+1. Finds every book link.
+2. Converts relative links into absolute URLs.
+3. Adds the URLs to a set to remove duplicates.
+4. Follows the `Next` catalogue link.
+5. Stops after three catalogue pages.
+
+The scraper also waits at least 0.5 seconds before each new real catalogue-page request. Cached pages do not require a delay.
+
+### Stage 2 Checkpoint
+
+Expected result:
+
+```text
+catalogue_pages=3
+discovered=60
+unique_urls=60
