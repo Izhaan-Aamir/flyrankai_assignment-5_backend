@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 import time
 from datetime import datetime, timezone
@@ -5,6 +7,7 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from pydantic import BaseModel, HttpUrl, ValidationError
 
 
 BASE_URL = "https://books.toscrape.com/"
@@ -15,11 +18,28 @@ HEADERS = {
 }
 
 CACHE_DIR = "cache"
+OUTPUT_DIR = "output"
+
+
+class Book(BaseModel):
+    """
+    Validated book record.
+    """
+
+    title: str
+    product_url: HttpUrl
+    price_text: str
+    price_gbp: float
+    availability_text: str
+    rating_text: str | None
+    description: str | None
+    source_page: HttpUrl
+    fetched_at: datetime
 
 
 def get_cache_file(url):
     """
-    Create a safe cache filename for a URL.
+    Create a short, deterministic cache filename for a URL.
     """
 
     if "catalogue/page-" in url:
@@ -30,12 +50,14 @@ def get_cache_file(url):
             f"catalogue-page-{page_number}.html"
         )
 
-    # Create a filename based on the final part of the book URL.
-    filename = url.rstrip("/").split("/")[-1]
+    # Use a short hash for book URLs.
+    url_hash = hashlib.sha256(
+        url.encode("utf-8")
+    ).hexdigest()[:16]
 
     return os.path.join(
         CACHE_DIR,
-        f"book-{filename}.html"
+        f"book-{url_hash}.html"
     )
 
 
@@ -44,9 +66,10 @@ def fetch_page(url):
     Fetch a page from the website or use the local cache.
     """
 
+    os.makedirs(CACHE_DIR, exist_ok=True)
+
     cache_file = get_cache_file(url)
 
-    # Use cache if available.
     if os.path.exists(cache_file):
 
         with open(cache_file, "r", encoding="utf-8") as file:
@@ -56,7 +79,6 @@ def fetch_page(url):
 
         return html
 
-    # Real request.
     print(f"FETCH: {url}")
 
     try:
@@ -70,7 +92,6 @@ def fetch_page(url):
         print(f"Request failed: {error}")
         return None
 
-    # Only accept HTTP 200.
     if response.status_code != 200:
         print(
             f"Fetch failed with status code: "
@@ -103,7 +124,6 @@ def discover_catalogue_pages():
 
         cache_file = get_cache_file(current_url)
 
-        # Only delay before a real request.
         if not os.path.exists(cache_file):
             if catalogue_pages:
                 time.sleep(0.5)
@@ -117,7 +137,6 @@ def discover_catalogue_pages():
 
         soup = BeautifulSoup(html, "html.parser")
 
-        # Find every book on this catalogue page.
         for article in soup.select("article.product_pod"):
 
             link = article.select_one("h3 a")
@@ -131,7 +150,6 @@ def discover_catalogue_pages():
 
                 book_urls.add(absolute_url)
 
-        # Find the next catalogue page.
         next_link = soup.select_one("li.next a")
 
         if next_link and next_link.get("href"):
@@ -167,7 +185,7 @@ def extract_text(element):
 
 def extract_book_details(book_url, source_page):
     """
-    Extract the required raw fields from one book page.
+    Extract raw fields from one book page.
     """
 
     html = fetch_page(book_url)
@@ -177,23 +195,23 @@ def extract_book_details(book_url, source_page):
 
     soup = BeautifulSoup(html, "html.parser")
 
-    # Title
-    title_element = soup.select_one("div.product_main h1")
+    title_element = soup.select_one(
+        "div.product_main h1"
+    )
     title = extract_text(title_element)
 
-    # Price
     price_element = soup.select_one(
         "div.product_main .price_color"
     )
     price_text = extract_text(price_element)
 
-    # Availability
     availability_element = soup.select_one(
         "div.product_main .availability"
     )
-    availability_text = extract_text(availability_element)
+    availability_text = extract_text(
+        availability_element
+    )
 
-    # Rating
     rating_element = soup.select_one(
         "div.product_main p.star-rating"
     )
@@ -201,10 +219,12 @@ def extract_book_details(book_url, source_page):
     rating_text = None
 
     if rating_element:
-        rating_classes = rating_element.get("class", [])
 
-        # The rating is stored in the CSS class:
-        # One, Two, Three, Four, or Five.
+        rating_classes = rating_element.get(
+            "class",
+            []
+        )
+
         rating_words = {
             "One",
             "Two",
@@ -214,18 +234,22 @@ def extract_book_details(book_url, source_page):
         }
 
         for rating in rating_classes:
+
             if rating in rating_words:
                 rating_text = rating
                 break
 
-    # Description
     description_element = soup.select_one(
         "#product_description + p"
     )
-    description = extract_text(description_element)
 
-    # Current UTC timestamp
-    fetched_at = datetime.now(timezone.utc).isoformat()
+    description = extract_text(
+        description_element
+    )
+
+    fetched_at = datetime.now(
+        timezone.utc
+    ).isoformat()
 
     return {
         "title": title,
@@ -241,12 +265,11 @@ def extract_book_details(book_url, source_page):
 
 def extract_all_books(catalogue_pages, book_urls):
     """
-    Visit every discovered book page and extract its raw data.
+    Visit every discovered book page.
     """
 
     records = []
 
-    # Map each book URL to its catalogue source page.
     book_sources = {}
 
     for source_page in catalogue_pages:
@@ -256,11 +279,18 @@ def extract_all_books(catalogue_pages, book_urls):
         if html is None:
             continue
 
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(
+            html,
+            "html.parser"
+        )
 
-        for article in soup.select("article.product_pod"):
+        for article in soup.select(
+            "article.product_pod"
+        ):
 
-            link = article.select_one("h3 a")
+            link = article.select_one(
+                "h3 a"
+            )
 
             if link and link.get("href"):
 
@@ -269,18 +299,23 @@ def extract_all_books(catalogue_pages, book_urls):
                     link["href"]
                 )
 
-                book_sources[book_url] = source_page
+                book_sources[
+                    book_url
+                ] = source_page
 
-    # Visit every book page.
-    for index, book_url in enumerate(book_urls, start=1):
+    for index, book_url in enumerate(
+        book_urls,
+        start=1
+    ):
 
         source_page = book_sources.get(
             book_url,
             catalogue_pages[0]
         )
 
-        # Wait before real requests.
-        cache_file = get_cache_file(book_url)
+        cache_file = get_cache_file(
+            book_url
+        )
 
         if not os.path.exists(cache_file):
             time.sleep(0.5)
@@ -294,25 +329,164 @@ def extract_all_books(catalogue_pages, book_urls):
             records.append(record)
 
         print(
-            f"Processed book {index}/{len(book_urls)}"
+            f"Processed book "
+            f"{index}/{len(book_urls)}"
         )
 
     return records
 
 
+def normalize_price(price_text):
+    """
+    Convert a raw price such as £51.77
+    into a numeric GBP value.
+    """
+
+    if not price_text:
+        raise ValueError(
+            "Missing price"
+        )
+
+    cleaned = (
+        price_text
+        .replace("Â£", "")
+        .replace("£", "")
+        .strip()
+    )
+
+    return float(cleaned)
+
+
+def normalize_record(raw_record):
+    """
+    Normalize one raw scraped record.
+    """
+
+    normalized = raw_record.copy()
+
+    normalized["price_gbp"] = normalize_price(
+        raw_record["price_text"]
+    )
+
+    return normalized
+
+
+def validate_records(raw_records):
+    """
+    Normalize and validate all records.
+
+    Valid records are returned separately
+    from invalid records.
+    """
+
+    valid_records = []
+    errors = []
+
+    for raw_record in raw_records:
+
+        try:
+
+            normalized = normalize_record(
+                raw_record
+            )
+
+            book = Book.model_validate(
+                normalized
+            )
+
+            valid_records.append(
+                book.model_dump(mode="json")
+            )
+
+        except (
+            ValueError,
+            ValidationError
+        ) as error:
+
+            errors.append(
+                {
+                    "record": raw_record,
+                    "error": str(error)
+                }
+            )
+
+    return valid_records, errors
+
+
+def save_json(filename, data):
+    """
+    Save data as formatted JSON.
+    """
+
+    os.makedirs(
+        OUTPUT_DIR,
+        exist_ok=True
+    )
+
+    path = os.path.join(
+        OUTPUT_DIR,
+        filename
+    )
+
+    with open(
+        path,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            data,
+            file,
+            indent=2,
+            ensure_ascii=False
+        )
+
+    return path
+
+
 if __name__ == "__main__":
 
-    catalogue_pages, book_urls = discover_catalogue_pages()
+    catalogue_pages, book_urls = (
+        discover_catalogue_pages()
+    )
 
-    records = extract_all_books(
+    raw_records = extract_all_books(
         catalogue_pages,
         book_urls
     )
 
     print()
-    print(f"detail_pages={len(records)}")
+    print(
+        f"detail_pages={len(raw_records)}"
+    )
 
-    if records:
-        print()
-        print("Sample raw record:")
-        print(records[0])
+    valid_records, errors = (
+        validate_records(raw_records)
+    )
+
+    save_json(
+        "books.json",
+        valid_records
+    )
+
+    save_json(
+        "errors.json",
+        errors
+    )
+
+    print()
+    print(
+        f"valid_records={len(valid_records)}"
+    )
+
+    print(
+        f"invalid_records={len(errors)}"
+    )
+
+    print(
+        f"saved=output/books.json"
+    )
+
+    print(
+        f"saved=output/errors.json"
+    )
