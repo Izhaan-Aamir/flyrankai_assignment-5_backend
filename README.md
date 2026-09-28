@@ -364,19 +364,193 @@ Contains an honest summary of the scraping run, including successful processing,
 
 ---
 
-## Politeness and Safety Rules
+## Installation and Usage
+
+### Requirements
+
+* Python 3.10 or newer
+* Internet connection for the initial scraping run
+
+### Install
+
+Clone the repository and enter the project directory:
+
+```powershell
+git clone https://github.com/Izhaan-Aamir/flyrankai_assignment-5_backend.git
+cd flyrankai_assignment-5_backend
+```
+
+Create and activate a virtual environment:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+Install the dependencies:
+
+```powershell
+pip install -r requirements.txt
+```
+
+### Run the Scraper
+
+Run:
+
+```powershell
+python src/main.py
+```
+
+The scraper processes the first three catalogue pages and produces:
+
+```text
+output/books.json
+output/errors.json
+output/run-report.json
+```
+
+### Run the Failure Test
+
+The failure-isolation test can be run with:
+
+```powershell
+python src/main.py --test-failure
+```
+
+This adds an intentionally invalid URL and verifies that the scraper continues processing the remaining books.
+
+---
+
+## Data Schema
+
+Each validated book record contains:
+
+```text
+title
+product_url
+price_text
+price_gbp
+availability_text
+rating_text
+description
+source_page
+fetched_at
+```
+
+The `price_text` field preserves the original extracted price, while `price_gbp` contains the normalized numeric value.
+
+Invalid records are separated into:
+
+```text
+output/errors.json
+```
+
+---
+
+## Politeness Rules
 
 The scraper follows these practices:
 
-* Identifying User-Agent
-* Request timeout
-* At least 0.5 seconds between real requests
-* Local caching to avoid unnecessary repeated requests
-* Retry only for timeouts, connection errors, and HTTP 5xx responses
-* No retry for HTTP 403 or 404 responses
-* Limited scope of exactly three catalogue pages
-* Failure isolation so one broken page does not stop the complete run
+* Uses a descriptive User-Agent.
+* Uses a 5-second request timeout.
+* Waits at least 0.5 seconds between real requests.
+* Uses local caching to avoid unnecessary repeated requests.
+* Retries timeouts and connection errors once.
+* Retries HTTP 5xx server errors once.
+* Does not retry HTTP 403 or 404 responses.
+* Limits crawling to the first three catalogue pages.
+* Continues processing when an individual page fails.
 
-The scraper is designed specifically for the Books to Scrape practice sandbox.
+Cached pages do not require a new request or delay.
+
+---
+
+## Why No Browser Was Used
+
+A browser automation tool was not necessary for this target.
+
+Books to Scrape provides the required catalogue and book information directly in server-rendered HTML. The required data can therefore be retrieved using normal HTTP requests and parsed with Beautiful Soup.
+
+Using direct HTTP requests keeps the scraper simple and appropriate for the limited three-page scope of this assignment.
+
+---
+
+## Honest Limitation
+
+This project is intentionally limited to the first three catalogue pages of Books to Scrape.
+
+It is a learning-focused scraper rather than a general-purpose crawling framework.
+
+The scraper also depends on the current HTML structure of Books to Scrape. Changes to the site's markup could require updates to the extraction selectors.
+
+The project should not be reused on another website without first checking that site's rules, terms, and applicable restrictions.
+
+---
+
+## Ethics Note
+
+This project was created for the controlled Books to Scrape practice environment.
+
+The scraper uses:
+
+* A descriptive User-Agent
+* Request timeouts
+* Delays between real requests
+* Local caching
+* Limited crawling scope
+* Failure isolation
+* No paid proxies or bypass mechanisms
 
 > I will not reuse this code on another site without checking its rules and terms first.
+
+---
+
+## Stage 6 — Publication
+
+The project is prepared for publication as a public GitHub repository containing:
+
+* Scraper source code
+* Dependency information
+* Documentation
+* Sample JSON output
+* Run report evidence
+
+The local HTML cache is excluded from version control because it is generated data and is not required for another user to understand or run the scraper.
+
+The repository provides a copy-paste installation and run process so that a new user can set up the project and execute the scraper without relying on the developer's local environment.
+
+The published repository should contain the project source and sample evidence, but should not contain the generated HTML cache.
+
+---
+
+## Project Pipeline
+
+The complete scraper pipeline is:
+
+```text
+Fetch
+  ↓
+Extract
+  ↓
+Normalize
+  ↓
+Validate
+  ↓
+Store
+  ↓
+Report
+```
+
+The final implementation demonstrates:
+
+* Catalogue discovery
+* HTML parsing
+* Book detail extraction
+* Data normalization
+* Pydantic validation
+* JSON storage
+* Local caching
+* Request politeness
+* Failure isolation
+* Retry handling
+* Honest run reporting
