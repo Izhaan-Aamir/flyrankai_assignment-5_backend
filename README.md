@@ -145,3 +145,33 @@ Expected result:
 catalogue_pages=3
 discovered=60
 unique_urls=60
+
+## Stage 3 — Extract Book Details
+
+The scraper now visits every unique book URL discovered from the first three catalogue pages.
+
+For each book page, the scraper extracts the following raw fields:
+
+- `title`
+- `product_url`
+- `price_text`
+- `availability_text`
+- `rating_text`
+- `description`
+- `source_page`
+- `fetched_at`
+
+The original price is kept as `price_text` at this stage. Normalization into a numeric `price_gbp` field is handled in Stage 4.
+
+The `source_page` field preserves the catalogue page where the book was discovered.
+
+Book HTML pages are also cached locally so repeated development runs do not repeatedly request the same pages.
+
+A delay of at least 0.5 seconds is used before each real book-page request. Cached pages do not require a delay.
+
+### Stage 3 Checkpoint
+
+The scraper should successfully process:
+
+```text
+detail_pages=60
