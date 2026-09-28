@@ -38,16 +38,16 @@ The scraper will not crawl beyond the first three catalogue pages.
 
 For each book, the scraper will collect:
 
-- Title
-- Product URL
-- Price
-- Availability
-- Rating
-- Description
-- Source catalogue page
-- Fetch timestamp
+* Title
+* Product URL
+* Price
+* Availability
+* Rating
+* Description
+* Source catalogue page
+* Fetch timestamp
 
-The scraped information will later be cleaned, validated, and stored as JSON.
+The scraped information is cleaned, normalized, validated, and stored as JSON.
 
 ### Robots Check
 
@@ -81,6 +81,8 @@ The scraper will use only the required three catalogue pages and will follow pol
 
 > I will not reuse this code on another site without checking its rules and terms first.
 
+---
+
 ## Stage 1 — Fetch and Cache
 
 The scraper downloads the first Books to Scrape catalogue page:
@@ -91,9 +93,9 @@ https://books.toscrape.com/catalogue/page-1.html
 
 The request uses:
 
-- An identifying User-Agent
-- A 5-second timeout
-- HTTP status-code validation
+* An identifying User-Agent
+* A 5-second timeout
+* HTTP status-code validation
 
 A successful response is saved locally as:
 
@@ -121,9 +123,11 @@ Response size: <same number> bytes
 
 The complete HTML document is not printed to the terminal.
 
+---
+
 ## Stage 2 — Discover Three Catalogue Pages
 
-The scraper now parses the saved catalogue HTML using Beautiful Soup.
+The scraper parses the saved catalogue HTML using Beautiful Soup.
 
 It starts from catalogue page 1 and follows the catalogue's `Next` link until exactly three catalogue pages have been processed.
 
@@ -131,7 +135,7 @@ For each catalogue page, the scraper:
 
 1. Finds every book link.
 2. Converts relative links into absolute URLs.
-3. Adds the URLs to a set to remove duplicates.
+3. Removes duplicate URLs.
 4. Follows the `Next` catalogue link.
 5. Stops after three catalogue pages.
 
@@ -139,27 +143,30 @@ The scraper also waits at least 0.5 seconds before each new real catalogue-page 
 
 ### Stage 2 Checkpoint
 
-Expected result:
+The scraper successfully produces:
 
 ```text
 catalogue_pages=3
 discovered=60
 unique_urls=60
+```
+
+---
 
 ## Stage 3 — Extract Book Details
 
-The scraper now visits every unique book URL discovered from the first three catalogue pages.
+The scraper visits every unique book URL discovered from the first three catalogue pages.
 
 For each book page, the scraper extracts the following raw fields:
 
-- `title`
-- `product_url`
-- `price_text`
-- `availability_text`
-- `rating_text`
-- `description`
-- `source_page`
-- `fetched_at`
+* `title`
+* `product_url`
+* `price_text`
+* `availability_text`
+* `rating_text`
+* `description`
+* `source_page`
+* `fetched_at`
 
 The original price is kept as `price_text` at this stage. Normalization into a numeric `price_gbp` field is handled in Stage 4.
 
@@ -171,7 +178,205 @@ A delay of at least 0.5 seconds is used before each real book-page request. Cach
 
 ### Stage 3 Checkpoint
 
-The scraper should successfully process:
+The scraper successfully processes:
+
+```text
+catalogue_pages=3
+discovered=60
+unique_urls=60
+detail_pages=60
+```
+
+A complete raw record contains all eight required fields.
+
+---
+
+## Stage 4 — Normalize and Validate
+
+The raw book records are cleaned and validated before being stored.
+
+### Normalization
+
+The scraper:
+
+* Preserves the original `price_text`.
+* Converts the price into a numeric `price_gbp` value.
+* Keeps the product URL as the record's identity.
+* Preserves the source catalogue page and fetch timestamp.
+
+For example:
+
+```text
+price_text = "£51.77"
+price_gbp  = 51.77
+```
+
+### Validation
+
+The project uses a Pydantic `Book` model to validate the normalized records.
+
+The validated schema contains:
+
+* `title`
+* `product_url`
+* `price_text`
+* `price_gbp`
+* `availability_text`
+* `rating_text`
+* `description`
+* `source_page`
+* `fetched_at`
+
+Valid records are written to:
+
+```text
+output/books.json
+```
+
+Invalid records are written to:
+
+```text
+output/errors.json
+```
+
+This keeps validation failures separate from successfully processed records.
+
+### Stage 4 Checkpoint
+
+The scraper successfully produced:
 
 ```text
 detail_pages=60
+
+valid_records=60
+invalid_records=0
+
+saved=output/books.json
+saved=output/errors.json
+```
+
+The output contains exactly 60 valid book records.
+
+---
+
+## Stage 5 — Failure Isolation and Run Reporting
+
+The scraper now handles individual page failures without stopping the entire run.
+
+### Failure Handling
+
+* Request timeouts and connection errors are retried once.
+* HTTP 5xx server errors are retried once.
+* HTTP 403 and 404 errors are treated as non-retryable.
+* A failed page is recorded and the scraper continues processing the remaining pages.
+* Failed pages do not terminate the entire scraping run.
+
+### Run Report
+
+Every run creates:
+
+```text
+output/run-report.json
+```
+
+The report records:
+
+* Run start time
+* Run duration
+* Number of catalogue pages
+* Pages fetched
+* Cache hits
+* Valid records
+* Invalid records
+* Failed pages
+* Failed page URLs
+
+### Normal Run Checkpoint
+
+The normal run produces:
+
+```text
+catalogue_pages=3
+discovered=60
+unique_urls=60
+
+detail_pages=60
+
+valid_records=60
+invalid_records=0
+failed_pages=0
+```
+
+### Failure-Isolation Test
+
+The scraper includes a test using an intentionally invalid book URL.
+
+The test demonstrates that:
+
+```text
+404 response
+    ↓
+No retry
+    ↓
+Failed page recorded
+    ↓
+Scraper continues
+    ↓
+60 valid records still produced
+    ↓
+run-report.json records 1 failed page
+```
+
+The failure test produces:
+
+```text
+valid_records=60
+invalid_records=0
+failed_pages=1
+```
+
+This demonstrates that a single broken page does not terminate the entire scraping run.
+
+---
+
+## Output Files
+
+The scraper produces the following JSON outputs:
+
+```text
+output/
+├── books.json
+├── errors.json
+└── run-report.json
+```
+
+### `books.json`
+
+Contains the validated book records.
+
+### `errors.json`
+
+Contains records that failed validation.
+
+### `run-report.json`
+
+Contains an honest summary of the scraping run, including successful processing, cache usage, and failures.
+
+---
+
+## Politeness and Safety Rules
+
+The scraper follows these practices:
+
+* Identifying User-Agent
+* Request timeout
+* At least 0.5 seconds between real requests
+* Local caching to avoid unnecessary repeated requests
+* Retry only for timeouts, connection errors, and HTTP 5xx responses
+* No retry for HTTP 403 or 404 responses
+* Limited scope of exactly three catalogue pages
+* Failure isolation so one broken page does not stop the complete run
+
+The scraper is designed specifically for the Books to Scrape practice sandbox.
+
+> I will not reuse this code on another site without checking its rules and terms first.

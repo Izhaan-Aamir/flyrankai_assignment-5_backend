@@ -1,0 +1,13 @@
+{
+  "started_at": "2026-09-28T08:22:30.814336+00:00",
+  "duration_seconds": 1.97,
+  "catalogue_pages": 3,
+  "pages_fetched": 0,
+  "cache_hits": 66,
+  "valid_records": 60,
+  "invalid_records": 0,
+  "failed_pages": 1,
+  "failed_page_urls": [
+    "https://books.toscrape.com/catalogue/this-page-does-not-exist-for-stage-5/index.html"
+  ]
+}
